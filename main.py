@@ -34,7 +34,7 @@ def main():
     # Vamos rodar ciclos suficientes para fazer a soma
     # JUMP(start) -> LODD -> ADDD -> STOD -> JUMP(end)
     
-    for i in range(60): # 60 subciclos deve dar para ver algo acontecendo
+    for i in range(200): # 60 subciclos deve dar para ver algo acontecendo
         cpu.step()
         
         # Debug: Mostrar registradores importantes a cada passo

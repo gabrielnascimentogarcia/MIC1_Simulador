@@ -15,13 +15,17 @@ class Register:
         return self._value
 
     def read_signed(self):
-        """
-        Lê o valor como inteiro com sinal (Complemento de 2).
-        Ex: 0xFFFF vira -1
-        """
+        """Lê o valor como inteiro com sinal (Complemento de 2)"""
         if self._value & 0x8000: # Se o bit 15 for 1
             return self._value - 0x10000
         return self._value
 
     def __str__(self):
-        return f"[{self.name}: {self._value:04X}]" # Mostra em Hexadecimal (Ex: [PC: 000A])
+        return f"[{self.name}: {self._value:04X}]"
+
+class ReadOnlyRegister(Register):
+    """Registrador que ignora escritas (para constantes como 0, +1, AMASK)"""
+    def write(self, value):
+        # Ignora silenciosamente ou pode logar um aviso se quiser debugar
+        # print(f"[WARN] Tentativa de escrita no registrador constante {self.name} ignorada.")
+        pass
