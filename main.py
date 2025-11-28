@@ -4,9 +4,9 @@ from software.assembler import Assembler
 import os
 
 def main():
-    print("--- Montador e Simulador MIC-1 ---")
+    print("--- Montador e Simulador MIC-1 (Modo Texto) ---")
     
-    # 1. Montagem (Assembler)
+    # 1. MUDANÇA AQUI: Apontar para o teste complexo
     asm_file = "programs/teste_complexo.asm"
     
     if not os.path.exists(asm_file):
@@ -18,42 +18,39 @@ def main():
     program_bin = assembler.assemble(asm_file)
     
     print(f"Binário gerado ({len(program_bin)} palavras):")
-    # Mostra em Hexa para conferirmos
     print([hex(x) for x in program_bin]) 
     
-    # 2. Inicialização da CPU
     print("\nIniciando CPU e Carregando Memória...")
     cpu = CPU()
     
-    # Carrega o programa na RAM (Endereço 0 em diante)
     for addr, value in enumerate(program_bin):
         cpu.ram.write(addr, value)
         
-    # 3. Execução
-    print("\nRodando Simulação (Pressione Enter)...")
-    # Vamos rodar ciclos suficientes para fazer a soma
-    # JUMP(start) -> LODD -> ADDD -> STOD -> JUMP(end)
+    print("\nRodando Simulação (Aguarde)...")
     
-    for i in range(200): # 60 subciclos deve dar para ver algo acontecendo
+    # Rodamos 200 ciclos para garantir que dê tempo de fazer todas as operações
+    for i in range(1000): 
         cpu.step()
-        
-        # Debug: Mostrar registradores importantes a cada passo
-        pc = cpu.regs[1].read()
-        ac = cpu.regs[4].read()
-        ir = cpu.regs[2].read()
-        print(f"   [Estado] PC={pc} AC={ac} IR={ir:04X}")
-        
-        # Pausa opcional (comente se quiser rodar direto)
-        # input() 
+        # Se quiser ver o log detalhado, descomente abaixo, mas vai ficar grande:
+        # pc = cpu.regs[1].read()
+        # print(f"   [Ciclo {i}] PC={pc} AC={cpu.regs[4].read():04X}")
 
-    # 4. Verificação Final
-    # O resultado (15 + 25 = 40) deve estar na variável var_c
-    # var_c é a 3ª posição de dados, mas tem o JUMP inicial (addr 0).
-    # Estrutura: 0:JUMP, 1:var_a, 2:var_b, 3:var_c
-    res_addr = 3 
-    resultado = cpu.ram.read(res_addr)
-    print(f"\n--- FIM ---")
-    print(f"Resultado na Memória[{res_addr}]: {resultado} (Esperado: 40)")
+    # 4. MUDANÇA AQUI: Verificação do Resultado
+    # No teste_complexo.asm:
+    # Endereço 3 (res) deve ser -10 (0xFFF6)
+    # Endereço 4 (status) deve ser 1 (Sucesso)
+    
+    val_res = cpu.ram.read(3)
+    val_status = cpu.ram.read(4)
+    
+    print(f"\n--- RESULTADO FINAL ---")
+    print(f"Variável 'res'    (End 3): {val_res:04X} (Esperado: FFF6 [-10])")
+    print(f"Variável 'status' (End 4): {val_status}    (Esperado: 1 [Sucesso])")
+
+    if val_status == 1:
+        print("\n>>> SUCESSO! A CPU passou no teste de estresse! <<<")
+    else:
+        print("\n>>> FALHA! O salto condicional ou a subtração não funcionaram. <<<")
 
 if __name__ == "__main__":
     main()
