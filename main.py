@@ -7,7 +7,7 @@ def main():
     print("--- Montador e Simulador MIC-1 ---")
     
     # 1. Montagem (Assembler)
-    asm_file = "programs/teste_soma.asm"
+    asm_file = "programs/teste_complexo.asm"
     
     if not os.path.exists(asm_file):
         print(f"ERRO: Crie o arquivo {asm_file} primeiro!")

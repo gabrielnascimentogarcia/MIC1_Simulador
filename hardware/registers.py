@@ -26,6 +26,5 @@ class Register:
 class ReadOnlyRegister(Register):
     """Registrador que ignora escritas (para constantes como 0, +1, AMASK)"""
     def write(self, value):
-        # Ignora silenciosamente ou pode logar um aviso se quiser debugar
-        # print(f"[WARN] Tentativa de escrita no registrador constante {self.name} ignorada.")
+        # Ignora silenciosamente (proteção de hardware)
         pass

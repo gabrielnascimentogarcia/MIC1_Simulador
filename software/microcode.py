@@ -30,12 +30,15 @@ def decode_microinstruction(instr):
 
 CONTROL_STORE = {}
 
-# FETCH
+# --- FETCH CYCLE (Otimizado) ---
+# 0: MAR := PC; RD
 CONTROL_STORE[0] = create_uinst(addr_next=1, mar=1, rd=1, b='PC', alu=ALU_ADD)
+# 1: PC := PC + 1; (RD removido pois a memória já está lendo)
 CONTROL_STORE[1] = create_uinst(addr_next=2, enc=1, c='PC', b='PC', a='+1', alu=ALU_ADD)
+# 2: IR := MBR; Goto DECODE
 CONTROL_STORE[2] = create_uinst(addr_next=0, cond=COND_JUMP, enc=1, c='IR', b='MBR', alu=ALU_ADD)
 
-# --- INSTRUÇÕES ---
+# --- INSTRUÇÕES BÁSICAS ---
 
 # LODD (0000)
 CONTROL_STORE[6] = create_uinst(addr_next=7, mar=1, rd=1, b='IR', a='AMASK', alu=ALU_AND)
@@ -45,41 +48,40 @@ CONTROL_STORE[8] = create_uinst(addr_next=0, enc=1, c='AC', b='MBR', alu=ALU_ADD
 # STOD (0001)
 CONTROL_STORE[9] = create_uinst(addr_next=10, mar=1, b='IR', a='AMASK', alu=ALU_AND)
 CONTROL_STORE[10] = create_uinst(addr_next=11, mbr=1, wr=1, b='AC', alu=ALU_ADD)
-CONTROL_STORE[11] = create_uinst(addr_next=0, wr=1)
+CONTROL_STORE[11] = create_uinst(addr_next=0, wr=1) # Ciclo extra para garantir escrita
 
 # ADDD (0010)
 CONTROL_STORE[12] = create_uinst(addr_next=13, mar=1, rd=1, b='IR', a='AMASK', alu=ALU_AND)
 CONTROL_STORE[13] = create_uinst(addr_next=14, rd=1)
 CONTROL_STORE[14] = create_uinst(addr_next=0, enc=1, c='AC', b='AC', amux=1, alu=ALU_ADD)
 
-# SUBD (0011) - AC - MBR (Complemento de 2)
+# SUBD (0011) - Implementação: AC = AC - MBR
+# Usamos Compl. de 2: AC = AC + (~MBR + 1)
 CONTROL_STORE[15] = create_uinst(addr_next=16, mar=1, rd=1, b='IR', a='AMASK', alu=ALU_AND)
 CONTROL_STORE[16] = create_uinst(addr_next=17, rd=1)
-CONTROL_STORE[17] = create_uinst(addr_next=18, enc=1, c='A', amux=1, alu=ALU_NOT) # A = ~MBR
-CONTROL_STORE[18] = create_uinst(addr_next=19, enc=1, c='AC', b='AC', a='+1', alu=ALU_ADD) # AC+1
-CONTROL_STORE[19] = create_uinst(addr_next=0, enc=1, c='AC', b='AC', a='A', alu=ALU_ADD) # AC + ~MBR
+# Passo 1: A := NOT MBR (Guarda ~MBR no reg A temporário)
+CONTROL_STORE[17] = create_uinst(addr_next=18, enc=1, c='A', amux=1, alu=ALU_NOT) 
+# Passo 2: AC := AC + 1 (Adiciona 1 ao acumulador)
+CONTROL_STORE[18] = create_uinst(addr_next=19, enc=1, c='AC', b='AC', a='+1', alu=ALU_ADD)
+# Passo 3: AC := AC + A (Soma o ~MBR)
+CONTROL_STORE[19] = create_uinst(addr_next=0, enc=1, c='AC', b='AC', a='A', alu=ALU_ADD)
 
-# JPOS (0100) - Jump if AC >= 0 (N=0)
-# Passo 1: Recalcular flags (ALU = AC)
-# Se N=1 (Negativo), JAMN vai jogar para endereço 20 + 256 = 276.
-# Se N=0 (Positivo), vai para 20 + 0 = 20.
-# Queremos pular se N=0. Então o MPC 20 deve fazer o Jump. O MPC 276 deve abortar.
+# --- SALTOS (Com recálculo de flags) ---
+
+# JPOS (0100) - Jump if AC >= 0
+# Passo 1: Passa AC pela ULA para setar flags N e Z corretamente
 CONTROL_STORE[20] = create_uinst(addr_next=21, b='AC', alu=ALU_A, cond=COND_N)
-# Caminho POSITIVO (N=0, Jump Taken)
-CONTROL_STORE[21] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', alu=ALU_AND) 
-# Caminho NEGATIVO (N=1, Jump Not Taken -> MPC 276 (20|0x100))
-# Como addr_next em 20 era 21, se N=1, ele vai para 21 | 0x100 = 277?
-# Não, o hardware faz: MPC = addr_next | (0x100 if N else 0).
-# Se addr_next é 21. Se N=1, vai para 21 + 256 = 277.
-CONTROL_STORE[277] = create_uinst(addr_next=0) # Aborta (não pula)
+# Se N=1 (Negativo), JAM ativa bit 256 -> Vai para 20|0x100 = 277 (Não pula)
+# Se N=0 (Positivo), Vai para 21 (Pula)
+CONTROL_STORE[21] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', alu=ALU_AND) # Pula
+CONTROL_STORE[277] = create_uinst(addr_next=0) # Não pula, volta pro início
 
-# JZER (0101) - Jump if Zero (Z=1)
-# Recalcula Flags
+# JZER (0101) - Jump if Zero
 CONTROL_STORE[23] = create_uinst(addr_next=24, b='AC', alu=ALU_A, cond=COND_Z)
-# Caminho NÃO ZERO (Z=0, Jump Not Taken) -> Vai para 24
-CONTROL_STORE[24] = create_uinst(addr_next=0) # Aborta
-# Caminho ZERO (Z=1, Jump Taken) -> Vai para 24 | 0x100 = 280
-CONTROL_STORE[280] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', alu=ALU_AND)
+# Se Z=1, vai para 24|0x100 = 280 (Pula)
+# Se Z=0, vai para 24 (Não pula)
+CONTROL_STORE[24] = create_uinst(addr_next=0) # Não pula
+CONTROL_STORE[280] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', alu=ALU_AND) # Pula
 
 # JUMP (0110)
 CONTROL_STORE[26] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', alu=ALU_AND)
@@ -87,23 +89,40 @@ CONTROL_STORE[26] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', 
 # LOCO (0111)
 CONTROL_STORE[27] = create_uinst(addr_next=0, enc=1, c='AC', b='IR', a='AMASK', alu=ALU_AND)
 
-# JNEG (1100) - Jump if Negative (N=1)
+# JNEG (1100) - Jump if Negative
 CONTROL_STORE[28] = create_uinst(addr_next=29, b='AC', alu=ALU_A, cond=COND_N)
-# Caminho POSITIVO (N=0) -> Vai para 29
-CONTROL_STORE[29] = create_uinst(addr_next=0) # Aborta
-# Caminho NEGATIVO (N=1) -> Vai para 29 | 0x100 = 285
+# Se N=1, vai para 285 (Pula)
+# Se N=0, vai para 29 (Não pula)
+CONTROL_STORE[29] = create_uinst(addr_next=0)
 CONTROL_STORE[285] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', alu=ALU_AND)
 
-# JNZE (1101) - Jump if Not Zero (Z=0)
+# JNZE (1101) - Jump if Not Zero
 CONTROL_STORE[30] = create_uinst(addr_next=31, b='AC', alu=ALU_A, cond=COND_Z)
-# Caminho NÃO ZERO (Z=0) -> Vai para 31 (Jump Taken)
+# Se Z=1, vai para 287 (Não pula)
+# Se Z=0, vai para 31 (Pula)
 CONTROL_STORE[31] = create_uinst(addr_next=0, enc=1, c='PC', b='IR', a='AMASK', alu=ALU_AND)
-# Caminho ZERO (Z=1) -> Vai para 31 | 0x100 = 287 (Jump Not Taken)
 CONTROL_STORE[287] = create_uinst(addr_next=0)
 
-# Mapeamento
+
+# --- INSTRUÇÕES DE PILHA E ESTENDIDAS (F...) ---
+
+# PUSH (F400) - SP := SP - 1; M[SP] := AC
+CONTROL_STORE[35] = create_uinst(addr_next=36, enc=1, c='SP', b='SP', a='-1', alu=ALU_ADD)
+CONTROL_STORE[36] = create_uinst(addr_next=37, mar=1, b='SP', alu=ALU_ADD) # MAR = SP
+CONTROL_STORE[37] = create_uinst(addr_next=38, mbr=1, wr=1, b='AC', alu=ALU_ADD) # MBR = AC; WR
+CONTROL_STORE[38] = create_uinst(addr_next=0, wr=1)
+
+# POP (F600) - AC := M[SP]; SP := SP + 1
+CONTROL_STORE[39] = create_uinst(addr_next=40, mar=1, b='SP', alu=ALU_ADD)
+CONTROL_STORE[40] = create_uinst(addr_next=41, rd=1)
+CONTROL_STORE[41] = create_uinst(addr_next=42, enc=1, c='AC', b='MBR', alu=ALU_ADD) # AC = MBR
+CONTROL_STORE[42] = create_uinst(addr_next=0, enc=1, c='SP', b='SP', a='+1', alu=ALU_ADD) # SP++
+
+# --- MAPEAMENTO ---
 OPCODE_MAP = {
-    0x0000: 6, 0x1000: 9, 0x2000: 12, 0x3000: 15,
-    0x4000: 20, 0x5000: 23, 0x6000: 26, 0x7000: 27,
-    0xC000: 28, 0xD000: 30
+    0x0000: 6, 0x1000: 9, 0x2000: 12, 0x3000: 15, # Básicas
+    0x4000: 20, 0x5000: 23, 0x6000: 26, 0x7000: 27, # Saltos/LOCO
+    0xC000: 28, 0xD000: 30, # Mais Saltos
+    0xF400: 35, # PUSH
+    0xF600: 39  # POP
 }
